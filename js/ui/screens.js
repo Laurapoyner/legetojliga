@@ -581,7 +581,7 @@ export const care = {
       <div class="care-grid">${CARE.map((a) => {
         const left = careCooldownLeft(t, a.id);
         return `<button type="button" class="care-btn care-${a.id}" data-act="care" data-action="${a.id}" data-id="${t.id}" ${left ? 'disabled' : ''}>
-          ${icon(a.icon, 'care-ic')}<b>${a.name}</b><small>${left ? `Igen om ${fmtDuration(left)}` : used >= cap ? 'Klar' : `+${a.xp} XP`}</small>
+          ${icon(a.icon, 'care-ic')}<b>${a.name}</b><small>${left ? `Igen om ${fmtDuration(left)}` : `${icon('photo_camera')}${used >= cap ? 'Klar' : `+${a.xp} XP`}`}</small>
         </button>`;
       }).join('')}</div>
       <p class="help center">${used >= cap ? `${esc(t.name)} har fået alle ${cap} pleje-XP i dag – men den elsker stadig at blive passet på.` : `Pleje giver op til ${cap} XP om dagen pr. figur.`} Din figur mister aldrig levels, hvis du holder pause.</p>`;
@@ -590,31 +590,15 @@ export const care = {
     careFor({ id }) {
       go('care', { id }, { replace: true });
     },
-    care({ action, id }, el) {
-      const r = doCare({ childId: app.childId, toyId: id, actionId: action });
-      if (!r.ok) {
+    care({ action, id }) {
+      const toy = toyById(id);
+      const left = toy ? careCooldownLeft(toy, action) : 0;
+      if (left) {
         sfx.error();
-        toast(r.reason, { icon: 'schedule' });
-        return;
+        return toast(`${toy.name} har lige fået det. Prøv igen om ${fmtDuration(left)}`, { icon: 'schedule' });
       }
-      sfx.care();
-      el.disabled = true;
-      const toyEl = document.getElementById('room-toy');
-      toyEl?.classList.remove('bounce');
-      void toyEl?.offsetWidth;
-      toyEl?.classList.add('bounce');
-      const fx = document.getElementById('room-fx');
-      if (fx) {
-        const icons = CARE_FX[r.anim] || CARE_FX.hearts;
-        fx.innerHTML = icons.map((e, i) => `<span style="--i:${i}">${e}</span>`).join('');
-      }
-      if (r.gained) floatText(toyEl, `+${r.gained} XP`, 'float-xp');
-      toast(r.msg, { icon: 'favorite', tone: 'mint', ms: 2000 });
-      say(r.msg, { interrupt: true });
-      const route = app.route;
-      setTimeout(() => {
-        if (app.route === route) rerender();
-      }, 1400);
+      sfx.tap();
+      go('exercise', { id: `care:${action}`, toyId: id });
     },
   },
 };

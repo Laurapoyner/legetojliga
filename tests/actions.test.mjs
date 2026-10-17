@@ -117,7 +117,7 @@ test('pleje giver lidt XP med loft og nedkøling', async () => {
   const { ida, bamse } = await fresh();
   const r = A.doCare({ childId: ida.id, toyId: bamse.id, actionId: 'mad' });
   assert.equal(r.ok, true);
-  assert.equal(r.gained, 4);
+  assert.equal(r.gained, 5);
   const again = A.doCare({ childId: ida.id, toyId: bamse.id, actionId: 'mad' });
   assert.equal(again.ok, false);
   for (const a of ['vand', 'sov', 'vask', 'leg', 'kram']) A.doCare({ childId: ida.id, toyId: bamse.id, actionId: a });

@@ -270,3 +270,46 @@ test('ingen person i billedet giver en hjælpetekst', () => {
   const cut = repeat(10, () => figure({}, rnd).map((p, i) => (i >= 25 ? { ...p, visibility: 0.1 } : p)));
   assert.match(run(d2, cut).hint, /hele kroppen/);
 });
+
+// Pleje-lege: hænderne flyttes direkte på pindemanden
+function withHands(base, hands) {
+  const P = base.map((p) => ({ ...p }));
+  for (const [i, x, y] of hands) P[i] = { x: x / ASPECT, y, visibility: 0.95 };
+  return P;
+}
+
+test('pleje: mad tæller hånd til mund, kram og søvn holdes', () => {
+  const rnd = makeRnd(20);
+  const mouth = [16, CX + 0.02, 0.21];
+  const down = [16, CX + 0.1, 0.52];
+  const mad = armed('handToMouth', 6);
+  const frames = [];
+  for (let k = 0; k < 6; k++) frames.push(...repeat(8, () => withHands(figure({}, rnd), [down])), ...repeat(8, () => withHands(figure({}, rnd), [mouth])));
+  frames.push(...repeat(8, () => withHands(figure({}, rnd), [down])));
+  assert.equal(run(mad, frames).count, 6);
+
+  const hug = armed('selfHug', 4, 'sec');
+  assert.equal(run(hug, repeat(5 * 30, () => withHands(figure({}, rnd), [[15, CX + 0.07, 0.3], [16, CX - 0.07, 0.31]]))).done, true);
+  const noHug = armed('selfHug', 4, 'sec');
+  assert.ok(run(noHug, repeat(5 * 30, () => figure({}, rnd))).seconds < 1);
+
+  const sleep = armed('sleep', 6, 'sec');
+  assert.equal(run(sleep, repeat(7 * 30, () => withHands(figure({ noise: 0.002 }, rnd), [[15, CX + 0.06, 0.2], [16, CX + 0.075, 0.225]]))).done, true);
+});
+
+test('pleje: tandbørstning kræver bevægelse ved munden, klap over hovedet tælles', () => {
+  const rnd = makeRnd(21);
+  const brush = armed('brush', 8, 'sec');
+  const fr = repeat(10 * 30, (i) => withHands(figure({}, rnd), [[16, CX + 0.03 + Math.sin((i / 30) * 2 * Math.PI * 2) * 0.03, 0.21]]));
+  assert.equal(run(brush, fr).done, true);
+  const still = armed('brush', 8, 'sec');
+  assert.ok(run(still, repeat(10 * 30, () => withHands(figure({}, rnd), [[16, CX + 0.03, 0.21]]))).seconds < 1);
+
+  const clap = armed('clapUp', 8);
+  const cf = [];
+  for (let k = 0; k < 8; k++) {
+    cf.push(...repeat(8, () => figure({ arms: 'out' }, rnd)));
+    cf.push(...repeat(8, () => withHands(figure({ arms: 'up' }, rnd), [[15, CX - 0.01, 0.05], [16, CX + 0.01, 0.05]])));
+  }
+  assert.equal(run(clap, cf).count, 8);
+});

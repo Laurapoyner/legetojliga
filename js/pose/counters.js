@@ -310,7 +310,7 @@ class HoldPose extends Detector {
     return UPPER_BODY;
   }
   step(p, t, dt) {
-    const ok = this.pose(p);
+    const ok = this.pose(p, t);
     if (ok) this.lastOk = t;
     const holding = ok || (this.lastOk != null && t - this.lastOk < 300);
     this.active = holding;
@@ -427,7 +427,129 @@ export class Run extends Detector {
   }
 }
 
+// ---------- Pleje-lege (kun overkroppen) ----------
+const sw = (p) => Math.max(0.03, dist(p[11], p[12]));
+
+// Mad: hånd op til munden og ned igen
+export class HandToMouth extends Detector {
+  required() {
+    return UPPER_BODY;
+  }
+  step(p) {
+    const s = sw(p);
+    const d = Math.min(dist(p[15], p[0]), dist(p[16], p[0])) / s;
+    const near = d < 0.75;
+    const away = d > 1.5;
+    this.meter = clamp(1 - (d - 0.5) / 1.5, 0, 1);
+    this.active = near;
+    if (this.phase === 'wait' || this.phase === 'away') {
+      if (this.phase === 'wait' && !this.hold(away, '_a')) {
+        this.hint = 'Start med hånden nede';
+        return;
+      }
+      if (this.phase === 'wait') this.go('away');
+      if (this.hold(near, '_n')) this.go('near');
+    } else if (this.phase === 'near') {
+      if (this.hold(away, '_a')) {
+        this.go('away');
+        this.rep(this.lastT, 300);
+      }
+    }
+  }
+}
+
+// Vand: hold hånden ved munden
+export class Drink extends HoldPose {
+  get offHint() {
+    return 'Hold hånden op til munden';
+  }
+  pose(p) {
+    const d = Math.min(dist(p[15], p[0]), dist(p[16], p[0])) / sw(p);
+    this.meter = clamp(1 - (d - 0.5) / 1.5, 0, 1);
+    return d < 0.8;
+  }
+}
+
+// Søvn: hænderne samlet ved hovedet og helt stille
+export class Sleep extends HoldPose {
+  get offHint() {
+    return 'Læg hænderne sammen under kinden, og stå stille';
+  }
+  pose(p, t) {
+    const s = sw(p);
+    const together = dist(p[15], p[16]) / s < 0.9;
+    const mid = { x: (p[15].x + p[16].x) / 2, y: (p[15].y + p[16].y) / 2 };
+    const byHead = dist(mid, p[0]) / s < 1.4;
+    const move = windowMove(this, p, t, [0, 15, 16], s);
+    if (move != null) this.energy = this.energy == null ? move : this.energy + 0.25 * (move - this.energy);
+    const still = (this.energy ?? 0) < 1.2;
+    this.meter = together && byHead ? clamp(1 - (this.energy ?? 0) / 2.4, 0, 1) : 0;
+    return together && byHead && still;
+  }
+}
+
+// Børst tænder: hånd ved munden, der bevæger sig
+export class Brush extends HoldPose {
+  get offHint() {
+    return 'Hånden ved munden – børst frem og tilbage!';
+  }
+  pose(p, t) {
+    const s = sw(p);
+    const right = dist(p[16], p[0]) <= dist(p[15], p[0]);
+    const w = right ? 16 : 15;
+    const near = dist(p[w], p[0]) / s < 1.0;
+    const move = windowMove(this, p, t, [w], s);
+    if (move != null) this.energy = this.energy == null ? move : this.energy + 0.3 * (move - this.energy);
+    const thr = this.diff === 'let' ? 0.5 : this.diff === 'svaer' ? 1.1 : 0.75;
+    this.meter = near ? clamp((this.energy ?? 0) / (thr * 2), 0, 1) : 0;
+    return near && (this.energy ?? 0) > thr;
+  }
+}
+
+// Leg: klap i hænderne over hovedet
+export class ClapUp extends Detector {
+  required() {
+    return UPPER_BODY;
+  }
+  step(p) {
+    const s = sw(p);
+    const apart = dist(p[15], p[16]) / s;
+    const up = p[15].y < p[0].y && p[16].y < p[0].y;
+    const clap = up && apart < 0.6;
+    const open = apart > 1.3;
+    this.meter = up ? clamp(1 - apart / 2, 0, 1) : 0;
+    this.active = clap;
+    if (this.phase !== 'open') {
+      if (this.hold(open, '_o')) this.go('open');
+      else if (this.phase === 'wait') this.hint = 'Stræk armene ud – og klap over hovedet';
+    } else if (this.hold(clap, '_c')) {
+      this.go('clap');
+      this.rep(this.lastT, 250);
+    }
+  }
+}
+
+// Kram: armene krydset og hænderne på de modsatte skuldre
+export class SelfHug extends HoldPose {
+  get offHint() {
+    return 'Kryds armene, og tag fat om skuldrene';
+  }
+  pose(p) {
+    const s = sw(p);
+    const a = dist(p[15], p[12]) / s;
+    const b = dist(p[16], p[11]) / s;
+    this.meter = clamp(1 - (Math.max(a, b) - 0.4) / 1.2, 0, 1);
+    return a < 0.75 && b < 0.75;
+  }
+}
+
 export const DETECTORS = {
+  handToMouth: HandToMouth,
+  drink: Drink,
+  sleep: Sleep,
+  brush: Brush,
+  clapUp: ClapUp,
+  selfHug: SelfHug,
   jumpingJack: JumpingJack,
   squat: Squat,
   highKnees: HighKnees,

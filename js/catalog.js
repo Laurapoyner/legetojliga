@@ -59,12 +59,19 @@ export const TIERS = [
 ];
 
 export const CARE = [
-  { id: 'mad', name: 'Giv mad', icon: 'restaurant', energi: 25, glaede: 5, cooldownMin: 180, xp: 4, anim: 'yum', msg: 'Mums! Det smagte godt.' },
-  { id: 'vand', name: 'Giv vand', icon: 'water_drop', energi: 15, glaede: 0, cooldownMin: 120, xp: 3, anim: 'drop', msg: 'Ahh, forfriskende!' },
-  { id: 'sov', name: 'Læg i seng', icon: 'bedtime', energi: 40, glaede: 0, cooldownMin: 360, xp: 4, anim: 'zzz', msg: 'Zzz … nu er den udhvilet.' },
-  { id: 'vask', name: 'Vask og børst', icon: 'shower', energi: 0, glaede: 15, cooldownMin: 360, xp: 4, anim: 'bubbles', msg: 'Skinnende ren!' },
-  { id: 'leg', name: 'Leg', icon: 'sports_soccer', energi: -5, glaede: 25, cooldownMin: 60, xp: 4, anim: 'ball', msg: 'Det var sjovt!' },
-  { id: 'kram', name: 'Giv et kram', icon: 'favorite', energi: 0, glaede: 15, cooldownMin: 30, xp: 2, anim: 'hearts', msg: 'Den elsker dig!' },
+  // cam: barnet viser plejen foran kameraet (kun overkroppen skal kunne ses)
+  { id: 'mad', name: 'Giv mad', icon: 'restaurant', energi: 25, glaede: 5, cooldownMin: 180, xp: 5, anim: 'yum', msg: 'Mums! Det smagte godt.',
+    cam: { detector: 'handToMouth', target: 6, unit: 'reps', tip: 'Lad som om du fodrer den: før hånden op til munden og ned igen. Mums!' } },
+  { id: 'vand', name: 'Giv vand', icon: 'water_drop', energi: 15, glaede: 0, cooldownMin: 120, xp: 4, anim: 'drop', msg: 'Ahh, forfriskende!',
+    cam: { detector: 'drink', target: 5, unit: 'sec', tip: 'Hold hånden op til munden, som om du drikker af et glas, og bliv ved.' } },
+  { id: 'sov', name: 'Læg i seng', icon: 'bedtime', energi: 40, glaede: 0, cooldownMin: 360, xp: 5, anim: 'zzz', msg: 'Zzz … nu er den udhvilet.',
+    cam: { detector: 'sleep', target: 6, unit: 'sec', tip: 'Læg hænderne sammen under kinden som en pude, og stå helt stille. Shh …' } },
+  { id: 'vask', name: 'Vask og børst', icon: 'shower', energi: 0, glaede: 15, cooldownMin: 360, xp: 5, anim: 'bubbles', msg: 'Skinnende ren!',
+    cam: { detector: 'brush', target: 8, unit: 'sec', tip: 'Børst tænder med en usynlig tandbørste: hånden ved munden, frem og tilbage!' } },
+  { id: 'leg', name: 'Leg', icon: 'sports_soccer', energi: -5, glaede: 25, cooldownMin: 60, xp: 5, anim: 'ball', msg: 'Det var sjovt!',
+    cam: { detector: 'clapUp', target: 8, unit: 'reps', tip: 'Klap i hænderne højt over hovedet – og ud til siden igen.' } },
+  { id: 'kram', name: 'Giv et kram', icon: 'favorite', energi: 0, glaede: 15, cooldownMin: 30, xp: 3, anim: 'hearts', msg: 'Den elsker dig!',
+    cam: { detector: 'selfHug', target: 4, unit: 'sec', tip: 'Giv dig selv et stort kram: kryds armene, og tag fat om skuldrene.' } },
 ];
 
 export const CATEGORIES = [

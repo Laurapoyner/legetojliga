@@ -1,8 +1,9 @@
 // Træning med kamera: kameraet tæller bevægelserne live, og figuren får XP, når øvelsen er klaret.
 
-import { S, activityById, toyById, completeCameraTraining, submitActivity, canDoActivity } from '../actions.js';
-import { scaledTarget, levelInfo } from '../rules.js';
-import { STAT_NAMES } from '../catalog.js';
+import { S, activityById, toyById, completeCameraTraining, submitActivity, canDoActivity, doCare } from '../actions.js';
+import { scaledTarget, levelInfo, careCooldownLeft } from '../rules.js';
+import { STAT_NAMES, CARE } from '../catalog.js';
+import { fmtDuration } from '../util.js';
 import { esc } from '../util.js';
 import { app, go, back, me, setUnmount } from './app.js';
 import { icon, toyPhoto } from './components.js';
@@ -150,7 +151,45 @@ function demoLandmarks(kind, t) {
     set(iK, cx + sgn * (0.05 + spread * 0.05 + squat * 0.04), 0.68 - knee * 0.16 - ft * 0.5 - jump);
     set(iA, cx + sgn * (0.05 + spread * 0.1), 0.86 - knee * 0.2 - ft - jump);
   }
+  // Pleje-legene bøjer albuerne, så hænderne placeres direkte
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const hand = (iE, iW, wx, wy, ex2, ey2) => {
+    set(iW, wx, wy);
+    set(iE, ex2, ey2);
+  };
+  if (kind === 'handToMouth') {
+    const k = (s(0.6) + 1) / 2;
+    hand(14, 16, lerp(cx + 0.17, cx + 0.02, k), lerp(0.52, 0.21, k), cx + 0.13, lerp(0.4, 0.34, k));
+  } else if (kind === 'drink') {
+    hand(14, 16, cx + 0.02, 0.21 + s(0.4) * 0.005, cx + 0.14, 0.33);
+  } else if (kind === 'sleep') {
+    hand(13, 15, cx + 0.06, 0.2, cx - 0.02, 0.36);
+    hand(14, 16, cx + 0.075, 0.225, cx + 0.12, 0.36);
+    P[0] = { x: cx + 0.01, y: 0.185, visibility: 1 };
+  } else if (kind === 'brush') {
+    hand(14, 16, cx + 0.03 + s(2) * 0.028, 0.21, cx + 0.13, 0.33);
+  } else if (kind === 'clapUp') {
+    const k = (s(0.7) + 1) / 2;
+    for (const [sgn, iE, iW] of [[-1, 13, 15], [1, 14, 16]]) {
+      const wx = cx + sgn * (0.01 + 0.3 * (1 - k));
+      const wy = lerp(0.3, 0.04, k);
+      hand(iE, iW, wx, wy, cx + sgn * lerp(0.2, 0.1, k), lerp(0.29, 0.16, k));
+    }
+  } else if (kind === 'selfHug') {
+    hand(13, 15, cx + 0.07, 0.3, cx - 0.02, 0.42);
+    hand(14, 16, cx - 0.07, 0.31, cx + 0.02, 0.43);
+  }
   return P;
+}
+
+// Pleje vises som en "øvelse": id'et er care:<handling>
+function resolveAct(id) {
+  if (String(id).startsWith('care:')) {
+    const c = CARE.find((x) => x.id === String(id).slice(5));
+    if (!c || !c.cam) return null;
+    return { id, care: c.id, title: c.name, xp: c.xp, kind: 'camera', stat: null, desc: c.cam.tip, cam: c.cam, msg: c.msg };
+  }
+  return activityById(id);
 }
 
 function drawDemo(canvas, kind, t) {
@@ -199,7 +238,7 @@ function drawDemo(canvas, kind, t) {
 export const exercise = {
   chrome: false,
   render({ id, toyId }) {
-    const a = activityById(id);
+    const a = resolveAct(id);
     const t = toyById(toyId);
     const c = me();
     if (!a || !t || !c || a.kind !== 'camera') {
@@ -230,7 +269,7 @@ export const exercise = {
   },
   mount(root, { id, toyId }) {
     cleanup();
-    const a = activityById(id);
+    const a = resolveAct(id);
     const c = me();
     if (!a || !c) return;
     ex = {
@@ -303,16 +342,16 @@ function introHtml(a, target) {
   return `<div class="ex-card ex-intro">
     <canvas class="ex-demo" id="ex-demo" aria-label="Animation af øvelsen" role="img"></canvas>
     <h2>${esc(a.title)}</h2>
-    <p class="ex-goal">${target} ${UNIT[a.cam.unit]} · træner ${a.stat === 'alle' ? 'alle evner' : STAT_NAMES[a.stat]?.toLowerCase()}</p>
+    <p class="ex-goal">${target} ${UNIT[a.cam.unit]} · ${a.care ? `pleje · +${a.xp} XP` : `træner ${a.stat === 'alle' ? 'alle evner' : STAT_NAMES[a.stat]?.toLowerCase()}`}</p>
     <p>${esc(TIPS[a.cam.detector] || a.desc || '')}</p>
     <ul class="ex-tips">
       <li>${icon('stay_current_portrait')}Stil iPad'en eller telefonen op, så den står stille</li>
-      <li>${icon('accessibility_new')}Gå 2–3 meter væk, så hele kroppen kan ses</li>
+      <li>${icon('accessibility_new')}${a.care ? 'Stil dig 1–2 meter væk, så hoved, arme og mave kan ses' : 'Gå 2–3 meter væk, så hele kroppen kan ses'}</li>
       <li>${icon('light_mode')}Godt lys hjælper kameraet</li>
     </ul>
-    ${inPreview() ? `<p class="ex-note">${icon('info')}I forhåndsvisningen her kan kameraet ikke bruges. Lav øvelsen, og lad en voksen godkende den. Når spillet ligger på jeres egen adresse, tæller kameraet selv.</p>` : ''}
+    ${inPreview() ? `<p class="ex-note">${icon('info')}I forhåndsvisningen her kan kameraet ikke bruges. ${a.care ? 'Brug knappen nedenfor i stedet.' : 'Lav øvelsen, og lad en voksen godkende den.'} Når spillet ligger på jeres egen adresse, virker kameraet.</p>` : ''}
     <button type="button" class="btn btn-lg btn-block" data-act="exStart">${icon('photo_camera')}Start kameraet</button>
-    <button type="button" class="link link-light" data-act="exManual">Virker kameraet ikke? Lad en voksen godkende</button>
+    <button type="button" class="link link-light" data-act="exManual">${a.care ? 'Virker kameraet ikke? Gør det uden kamera' : 'Virker kameraet ikke? Lad en voksen godkende'}</button>
     <p class="ex-privacy">${icon('lock')}Videoen bliver på denne enhed og gemmes ikke.</p>
   </div>`;
 }
@@ -390,8 +429,8 @@ async function startCamera() {
       ${icon('videocam_off', 'ex-fail-ic')}
       <h2>Kameraet virker ikke lige nu</h2>
       <p>${esc(inPreview() ? 'Kameraet kan ikke bruges i forhåndsvisningen i Claude. Når spillet ligger på jeres egen adresse (fx Render), tæller kameraet selv.' : explainCameraError(e))}</p>
-      <p>Du kan stadig lave øvelsen. Så skal en voksen bare godkende den bagefter.</p>
-      <button type="button" class="btn btn-lg btn-block" data-act="exManual">${icon('how_to_reg')}Lad en voksen godkende</button>
+      <p>${ex?.act?.care ? 'Du kan stadig passe på din figur uden kameraet.' : 'Du kan stadig lave øvelsen. Så skal en voksen bare godkende den bagefter.'}</p>
+      <button type="button" class="btn btn-lg btn-block" data-act="exManual">${ex?.act?.care ? `${icon('favorite')}Gør det uden kamera` : `${icon('how_to_reg')}Lad en voksen godkende`}</button>
       <button type="button" class="btn btn-ghost-dark btn-block" data-act="exStart">${icon('refresh')}Prøv kameraet igen</button>
     </div>`);
   }
@@ -523,6 +562,7 @@ function finish(st) {
   ex.stopLoop?.();
   stopStream(ex.stream);
   document.getElementById('ex-controls').hidden = true;
+  if (ex.act.care) return finishCare();
   const r = completeCameraTraining({
     childId: app.childId,
     toyId: ex.toyId,
@@ -552,8 +592,40 @@ function finish(st) {
   </div>`);
 }
 
+function finishCare() {
+  const t = toyById(ex.toyId);
+  const r = doCare({ childId: app.childId, toyId: ex.toyId, actionId: ex.act.care });
+  if (!r.ok) {
+    overlay(`<div class="ex-card"><h2>Godt gået!</h2><p>${esc(r.reason)}</p><button type="button" class="btn btn-lg btn-block" data-act="exDone">OK</button></div>`);
+    return;
+  }
+  sfx.care();
+  confetti({ count: 70 });
+  say(`${r.msg}${r.gained ? ` ${t.name} får ${r.gained} XP.` : ''}`, { interrupt: true });
+  setTimeout(flushCelebrations, 2200);
+  overlay(`<div class="ex-card ex-win">
+    <p class="cel-kicker">${esc(r.msg)}</p>
+    <div class="ex-win-toy">${toyPhoto(t, 'toy-img')}</div>
+    ${r.gained ? `<p class="ex-xp">+${r.gained} XP</p>` : '<p>Dagens pleje-XP er brugt – men den elskede det!</p>'}
+    <button type="button" class="btn btn-lg btn-block" data-act="exDone">${icon('check')}Færdig</button>
+  </div>`);
+}
+
 async function sendManual() {
   if (!ex) return;
+  if (ex.act.care) {
+    const r = doCare({ childId: app.childId, toyId: ex.toyId, actionId: ex.act.care });
+    if (!r.ok) {
+      toast(r.reason, { icon: 'schedule' });
+      return;
+    }
+    sfx.care();
+    toast(r.msg, { icon: 'favorite', tone: 'mint' });
+    cleanup();
+    say(r.msg);
+    back('care');
+    return;
+  }
   const r = await submitActivity({ childId: app.childId, toyId: ex.toyId, activityId: ex.act.id, photos: [], via: 'manual' });
   if (!r.ok) {
     toast(r.reason, { icon: 'error', tone: 'coral' });
