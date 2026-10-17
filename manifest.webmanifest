@@ -1,0 +1,17 @@
+{
+  "name": "LegetøjsLigaen",
+  "short_name": "LegetøjsLiga",
+  "description": "Børnenes legetøj bliver spilfigurer, der trænes, passes og kæmper.",
+  "lang": "da",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#dcebff",
+  "theme_color": "#dcebff",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LegetøjsLigaen</title>
+<meta name="description" content="Børnenes legetøj bliver spilfigurer, der trænes med rigtige bevægelser, passes og kæmper mod hinanden.">
+<meta name="theme-color" content="#dcebff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LegetøjsLigaen">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Lilita+One&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,600,1,0&display=block">
+<link rel="stylesheet" href="css/app.css">
+<style>
+  :root { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html, body { margin: 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<!-- APP:START -->
+<div id="app"><div class="boot" aria-busy="true"><span class="spinner" aria-hidden="true"></span></div></div>
+<div id="modal-root" hidden></div>
+<div id="celebrate-root" hidden></div>
+<div id="toast-root" aria-live="polite"></div>
+<noscript><p style="padding:24px;font-family:sans-serif">LegetøjsLigaen kræver JavaScript.</p></noscript>
+<script type="module" src="js/main.js"></script>
+<!-- APP:END -->
+</body>
+</html>
