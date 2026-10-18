@@ -578,17 +578,24 @@ export const care = {
         </div>
         ${careMeters(t)}
       </section>
-      <div class="care-grid">${CARE.map((a) => {
+      <div class="care-grid">${[...CARE].sort((x, y) => (careCooldownLeft(t, x.id) ? 1 : 0) - (careCooldownLeft(t, y.id) ? 1 : 0)).map((a) => {
         const left = careCooldownLeft(t, a.id);
-        return `<button type="button" class="care-btn care-${a.id}" data-act="care" data-action="${a.id}" data-id="${t.id}" ${left ? 'disabled' : ''}>
+        return `<div class="care-item">${speakBtn(a.id, 'readCare')}<button type="button" class="care-btn care-${a.id}" data-act="care" data-action="${a.id}" data-id="${t.id}" ${left ? 'disabled' : ''}>
           ${icon(a.icon, 'care-ic')}<b>${a.name}</b><small>${left ? `Igen om ${fmtDuration(left)}` : `${icon('photo_camera')}${used >= cap ? 'Klar' : `+${a.xp} XP`}`}</small>
-        </button>`;
+        </button></div>`;
       }).join('')}</div>
       <p class="help center">${used >= cap ? `${esc(t.name)} har fået alle ${cap} pleje-XP i dag – men den elsker stadig at blive passet på.` : `Pleje giver op til ${cap} XP om dagen pr. figur.`} Din figur mister aldrig levels, hvis du holder pause.</p>`;
   },
   actions: {
     careFor({ id }) {
       go('care', { id }, { replace: true });
+    },
+    readCare({ id }) {
+      const a = CARE.find((x) => x.id === id);
+      const t = toyById(app.route.params.id);
+      if (!a) return;
+      const left = t ? careCooldownLeft(t, a.id) : 0;
+      say(`${a.name}. ${a.cam?.tip || ''}${left ? ` ${t.name} har lige fået det. Prøv igen om ${fmtDuration(left).replace('t.', 'timer').replace('min.', 'minutter')}.` : ''}`, { interrupt: true });
     },
     care({ action, id }) {
       const toy = toyById(id);
@@ -625,11 +632,11 @@ export const training = {
       const u = activityUsage(S, c.id, a);
       const target = a.kind === 'camera' ? scaledTarget(a, c.difficulty) : null;
       const goal = a.kind === 'camera' ? (a.cam.unit === 'sec' ? `${target} sekunder` : `${target} gange`) : '';
-      return `<button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="${a.kind === 'camera' ? 'startExercise' : 'adultTraining'}" data-id="${a.id}" ${u.ok ? '' : 'aria-disabled="true"'}>
-        <span class="act-ic">${icon(a.icon || 'sprint')}</span>
-        <span class="act-body"><b>${esc(a.kind === 'camera' ? `${a.title}` : a.title)}</b><span>${esc(goal ? `${goal} · ${a.desc || ''}` : a.desc || '')}</span><small>${limitText(u)} · træner ${a.stat === 'alle' ? 'alle evner' : STAT_NAMES[a.stat]?.toLowerCase() || 'alt'}</small></span>
+      return `<div class="act-item">${speakBtn(a.id)}<button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="${a.kind === 'camera' ? 'startExercise' : 'adultTraining'}" data-id="${a.id}" ${u.ok ? '' : 'aria-disabled="true"'}>
+        <span class="act-ic">${icon(u.ok ? a.icon || 'sprint' : 'check')}</span>
+        <span class="act-body"><b>${esc(a.title)}</b><span>${esc(goal ? `${goal} · ${a.desc || ''}` : a.desc || '')}</span><small>${limitText(u)} · træner ${a.stat === 'alle' ? 'alle evner' : STAT_NAMES[a.stat]?.toLowerCase() || 'alt'}</small></span>
         <span class="act-xp">+${a.xp}<small>XP</small></span>
-      </button>`;
+      </button></div>`;
     };
     return `${pageHead('Træningscenter', { sub: 'Bevæg dig – så bliver din figur stærkere' })}
       <section class="block">
@@ -638,9 +645,9 @@ export const training = {
       </section>
       <section class="block">
         <h2 class="h2">${icon('photo_camera')}Kameraet tæller</h2>
-        <div class="act-list">${cam.map(row).join('')}</div>
+        <div class="act-list">${availableFirst(cam, c.id).map(row).join('')}</div>
       </section>
-      ${adult.length ? `<section class="block"><h2 class="h2">${icon('how_to_reg')}En voksen godkender</h2><div class="act-list">${adult.map(row).join('')}</div></section>` : ''}`;
+      ${adult.length ? `<section class="block"><h2 class="h2">${icon('how_to_reg')}En voksen godkender</h2><div class="act-list">${availableFirst(adult, c.id).map(row).join('')}</div></section>` : ''}`;
   },
   actions: {
     pickTrainToy({ id }) {
@@ -663,6 +670,33 @@ export const training = {
   },
 };
 
+// Opgaver, der kan laves nu, først – brugte opgaver nederst, til de kan laves igen
+function availableFirst(list, childId) {
+  const ok = [];
+  const used = [];
+  for (const a of list) (activityUsage(S, childId, a).ok ? ok : used).push(a);
+  return [...ok, ...used];
+}
+
+function speakBtn(id, kind = 'readAct') {
+  return `<button type="button" class="speak-mini" data-act="${kind}" data-id="${esc(id)}" aria-label="Læs op">${icon('volume_up')}</button>`;
+}
+
+// Tekst, der læses op for en opgave eller træning
+export function activitySpeech(a, childId) {
+  if (!a) return '';
+  const c = childById(childId);
+  const u = childId ? activityUsage(S, childId, a) : { ok: true };
+  let how;
+  if (a.kind === 'camera') {
+    const target = scaledTarget(a, c?.difficulty);
+    how = `Kameraet tæller. Lav ${target} ${a.cam.unit === 'sec' ? 'sekunder' : 'gange'}.`;
+  } else if (a.kind === 'photo') how = 'Tag et billede, når du er færdig. Så godkender en voksen det.';
+  else how = 'Når du er færdig, godkender en voksen det.';
+  const used = u.ok ? '' : u.per === 'week' ? ' Den er klaret nok gange denne uge.' : ' Den er klaret i dag. Prøv igen i morgen!';
+  return `${a.title}. ${a.desc || ''} ${how} Du får ${a.xp} XP.${used}`;
+}
+
 // ---------- Opgaver ----------
 
 export const tasks = {
@@ -681,14 +715,14 @@ export const tasks = {
         <button type="button" class="chip ${filter === 'alle' ? 'is-on' : ''}" data-act="taskCat" data-id="alle">Alle</button>
         ${cats.map((x) => `<button type="button" class="chip ${filter === x.id ? 'is-on' : ''}" data-act="taskCat" data-id="${x.id}">${icon(x.icon)}${x.name}</button>`).join('')}
       </div>
-      <div class="act-list">${acts
+      <div class="act-list">${availableFirst(acts, c.id)
         .map((a) => {
           const u = activityUsage(S, c.id, a);
-          return `<button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="openTask" data-id="${a.id}">
-            <span class="act-ic">${icon(a.icon || 'task_alt')}</span>
+          return `<div class="act-item">${speakBtn(a.id)}<button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="openTask" data-id="${a.id}">
+            <span class="act-ic">${icon(u.ok ? a.icon || 'task_alt' : 'check')}</span>
             <span class="act-body"><b>${esc(a.title)}</b><span>${esc(a.desc || '')}</span><small>${kindPill(a.kind)} ${limitText(u)}</small></span>
             <span class="act-xp">+${a.xp}<small>XP</small></span>
-          </button>`;
+          </button></div>`;
         })
         .join('')}</div>
       ${

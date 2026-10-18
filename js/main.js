@@ -11,7 +11,7 @@ import { flushCelebrations } from './ui/celebrations.js';
 import { icon, avatar } from './ui/components.js';
 import { sfx, toast, closeModal, isSoundOn, setSound, unlockAudio, modalOpen, celebrating } from './ui/fx.js';
 import { esc } from './util.js';
-import { unlockVoice, stopSpeaking } from './voice.js';
+import { unlockVoice, stopSpeaking, say } from './voice.js';
 import * as cloud from './cloud.js';
 
 const SCREENS = {
@@ -145,6 +145,10 @@ const GLOBAL = {
     closeModal();
     back();
   },
+  readAct({ id }) {
+    unlockVoice();
+    say(K.activitySpeech(A.activityById(id), app.childId), { interrupt: true });
+  },
   openToy({ id }) {
     sfx.tap();
     closeModal();
@@ -220,6 +224,17 @@ document.addEventListener('input', (e) => {
   SCREENS[app.route.name]?.inputs?.[el.dataset.input]?.(el.value, el);
 });
 
+// Ingen knib-zoom på iPad (Safari ignorerer nogle gange viewport-indstillingen)
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+}
+document.addEventListener(
+  'touchmove',
+  (e) => {
+    if (e.touches.length > 1 || (typeof e.scale === 'number' && e.scale !== 1)) e.preventDefault();
+  },
+  { passive: false },
+);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && modalOpen()) closeModal();
 });

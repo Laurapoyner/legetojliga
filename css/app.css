@@ -45,6 +45,8 @@
 html {
   -webkit-text-size-adjust: 100%;
   background: var(--mat);
+  /* Ingen zoom ved dobbelttryk eller knib – spillet er lavet til at passe til skærmen */
+  touch-action: pan-x pan-y;
 }
 
 body {
@@ -4572,4 +4574,67 @@ html[data-screen='exercise'] body::before {
 .setup-join input[name='code'] {
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+.act-item,
+.care-item {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.act-item .act-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.speak-mini {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  border: var(--bw) solid var(--ink);
+  border-radius: var(--r);
+  background: var(--sea-2);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  padding: 0;
+}
+
+.speak-mini .ms {
+  font-size: 1.6rem;
+}
+
+.speak-mini:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
+
+.care-item .care-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.care-item .speak-mini {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  border-width: 2.5px;
+  border-radius: 12px;
+}
+
+.care-item .speak-mini .ms {
+  font-size: 1.3rem;
+}
+
+/* Inputfelter mindst 16px, ellers zoomer iPad ind, når man skriver */
+input,
+select,
+textarea {
+  font-size: max(16px, 1rem);
 }
