@@ -2,7 +2,7 @@
 
 Børnenes eget legetøj bliver til spilfigurer. De tager et billede af en bamse, en dino eller en bil, giver den et navn og gør den stærkere ved at bevæge sig foran kameraet, rydde op, hjælpe til og passe på den. Bagefter kan de udfordre hinanden i arenaen.
 
-Det her er **testversionen**: en webapp uden database, som kører i browseren på iPad, telefon og computer. Alt gemmes på den enhed, man spiller på. MongoDB og fælles data på tværs af enheder er næste skridt (se nederst).
+En webapp, der kører i browseren på iPad, telefon og computer. Uden database gemmes alt på den enhed, man spiller på. Med MongoDB (se nedenfor) deler alle familiens enheder figurer, point, opgaver og kampe.
 
 ## Det kan spillet
 
@@ -79,6 +79,23 @@ Godt at vide:
 - En gratis Web Service på Render går i dvale, når ingen har brugt den et stykke tid. Første besøg derefter kan tage op mod et minut.
 - I forhåndsvisningen i Claude kan Azure ikke nås. Der bruges enhedens egen stemme.
 
+## Database (MongoDB) – flere enheder i samme familie
+
+1. Opret en gratis cluster på MongoDB Atlas (eller brug en, I har i forvejen – spillet bruger sin egen database, `legetoejsligaen`). Lav gerne en egen databasebruger til spillet.
+2. **Network Access**: tillad `0.0.0.0/0` (Render har ikke en fast IP på gratisplanen).
+3. På Render → **Environment**: `MONGODB_URI` = forbindelsesstrengen (`mongodb+srv://…`). Valgfrit: `MONGODB_DB` for et andet databasenavn.
+4. Build Command `npm install`, Start Command `npm start` (Web Service).
+
+Sådan bruges det:
+
+- **Ny familie:** opret familien som normalt. Den gemmes automatisk i skyen, og familiekoden står i Forældrepanel → **Data**.
+- **Har I allerede spillet på en iPad?** Forældrepanel → Data → **Gem i skyen og lav familiekode**. Alt på den iPad bliver familiens fælles data.
+- **Næste iPad:** åbn spillet, og vælg **Forbind til familien** med familiekoden og forældre-PIN.
+- Enhederne synkroniserer hvert 8. sekund og med det samme, når noget ændres. Uden internet gemmes alt på enheden og sendes, når forbindelsen er tilbage.
+- XP regnes ud fra loggen på serveren, så to enheder, der giver point samtidig, ikke overskriver hinanden. Godkendte opgaver og afgjorte kampe kan ikke blive "rullet tilbage" af en ældre enhed.
+- Hver enhed får sin egen hemmelige nøgle. **Afbryd denne enhed** fjerner den. **Slet alt** sletter hele familien i databasen.
+- Dagsgrænser (kampe, opgaver) tjekkes på enheden. To enheder, der præcis samtidig starter en kamp, kan i sjældne tilfælde give én kamp ekstra.
+
 ## Mappestruktur
 
 ```
@@ -92,6 +109,10 @@ js/store.js             Lagring på enheden (IndexedDB) – udskiftes med server
 js/pose/counters.js     Bevægelsestællere oven på MediaPipe Pose
 js/pose/camera.js       Kamera og indlæsning af MediaPipe
 js/voice.js             Oplæsning (Azure via serveren eller enhedens egen stemme)
+js/sync.js              Fletning af data mellem enheder (bruges af både browser og server)
+js/cloud.js             Forbindelse til familiens database (familiekode, synkronisering, billeder)
+server/api.js           API: opret familie, forbind, synkroniser, billeder
+server/db.js            MongoDB (og en udgave i hukommelsen til tests)
 js/ui/*.js              Skærmene (forside, figurer, træning, opgaver, arena, forældre …)
 tests/                  Automatiske tests (node --test)
 server.js               Lille webserver til lokal kørsel og Render Web Service + Azure-oplæsning
@@ -99,24 +120,9 @@ server.js               Lille webserver til lokal kørsel og Render Web Service 
 
 Vil I ændre point, opgaver eller tekster permanent, så ret `js/catalog.js`. Mange ting kan også ændres direkte i forældrepanelet.
 
-## Næste skridt: MongoDB og flere enheder
-
-Spillet er bygget, så reglerne (`rules.js`) kan genbruges på serveren, og alle ændringer går gennem `actions.js`. Plan:
-
-1. Tilføj Express og MongoDB-driveren, og lav et API i `server.js` (Render Web Service + MongoDB Atlas).
-2. Samlinger: `families`, `children`, `toys`, `submissions`, `xpLog`, `battles`, `careLog`, `settings`, `activities` – samme felter som i dag.
-3. Flyt validering af grænser, XP-tildeling og kampberegning til serveren (brug `rules.js`), så intet kan snydes fra browseren.
-4. Gem billeder privat (fx MongoDB GridFS eller en privat bucket) og slet dokumentationsbilleder efter 14 dage.
-5. Lad `actions.js` kalde API'et i stedet for at gemme lokalt, og hent nye udfordringer jævnligt eller via server-sent events.
-6. Login for familien (forældre-konto) og simpel profilvalg for børnene.
-
-### Prompt til en AI-kodeassistent til det skridt
-
-> Jeg har en fungerende webapp, LegetøjsLigaen (vanilla JS, ingen build). Al data gemmes i dag lokalt via `js/store.js`, og alle ændringer sker i `js/actions.js`, mens reglerne ligger i `js/rules.js`. Tilføj en Node/Express-backend i `server.js` med MongoDB (Atlas) til hosting på Render. Lav samlinger, der matcher felterne i `defaultState()` i `actions.js`. Flyt validering af dagsgrænser, XP og kampberegning til serveren ved at genbruge `rules.js`. Tilføj familie-login med forældre-PIN, privat lagring af billeder og synkronisering, så børnene kan udfordre hinanden fra hver sin enhed. Bevar alle eksisterende funktioner og tests, og tilføj tests for API'et. Lav en `.env.example` og vejledning til deployment på Render.
-
 ## Privatliv
 
 - Kameravideo analyseres på enheden og gemmes aldrig.
-- Billeder af legetøj og opgaver gemmes kun i browseren på enheden.
+- Billeder af legetøj og opgaver gemmes i browseren på enheden – og i jeres egen database, hvis den er sat op. Kun enheder med familiens nøgle kan hente dem.
 - Dokumentationsbilleder slettes automatisk 14 dage efter, at en voksen har godkendt eller afvist opgaven.
 - Ingen profiler er offentlige, og der er ingen kontakt med fremmede.

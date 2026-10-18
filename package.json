@@ -6,9 +6,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/"
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
+  },
+  "dependencies": {
+    "mongodb": "^6.10.0"
   }
 }

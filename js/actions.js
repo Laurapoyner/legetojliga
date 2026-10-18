@@ -109,19 +109,34 @@ export async function flushSave() {
 
 const photoCache = new Map();
 
+// Sættes af cloud.js, når enheden er forbundet til familiens database
+export const remote = { photoSaved: null, photoRemoved: null, fetchPhoto: null };
+
 export async function savePhoto(dataUrl, prefix = 'p') {
   const id = uid(prefix);
   await store.putPhoto(id, dataUrl);
   photoCache.set(id, dataUrl);
+  remote.photoSaved?.(id);
   return id;
 }
 
 export async function photoUrl(id) {
   if (!id) return null;
   if (photoCache.has(id)) return photoCache.get(id);
-  const url = await store.getPhoto(id);
+  let url = await store.getPhoto(id);
+  if (!url && remote.fetchPhoto) {
+    url = await remote.fetchPhoto(id).catch(() => null);
+    if (url) await store.putPhoto(id, url).catch(() => {});
+  }
   if (url) photoCache.set(id, url);
   return url;
+}
+
+// Data fra en anden enhed (via serveren) erstatter den lokale tilstand
+export function setRemoteState(next) {
+  // Altid en dyb kopi, så den lokale tilstand aldrig deler objekter med serverens kopi
+  S = migrate(JSON.parse(JSON.stringify(next)));
+  save();
 }
 
 export function cachedPhoto(id) {
@@ -132,6 +147,7 @@ async function removePhoto(id) {
   if (!id) return;
   photoCache.delete(id);
   await store.deletePhoto(id);
+  remote.photoRemoved?.(id);
 }
 
 // ---------- Familie og PIN ----------

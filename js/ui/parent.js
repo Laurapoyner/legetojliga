@@ -9,6 +9,7 @@ import { app, go, back, rerender, parentUnlocked, unlockParent, lockParent } fro
 import { icon, toyPhoto, avatar, kindPill, photo, empty, statusPill } from './components.js';
 import { sfx, toast, openModal, closeModal } from './fx.js';
 import { historyLine } from './screens.js';
+import * as cloud from '../cloud.js';
 import { AZURE_VOICES, RATES, voiceSettings, voiceProvider, resetVoiceProvider, say, stopSpeaking } from '../voice.js';
 
 const TABS = [
@@ -231,6 +232,41 @@ export const parent = {
       else if (ok === 'declined') toast('Backup blev ikke gemt', { icon: 'info' });
       else toast('Backup kan ikke gemmes i denne visning. Åbn spillet på jeres egen adresse.', { icon: 'error', tone: 'coral', ms: 5000 });
     },
+    async cloudCreate(_d, el) {
+      el.disabled = true;
+      try {
+        const code = await cloud.createFamily();
+        toast(`Gemt i skyen. Familiekode: ${code}`, { icon: 'cloud_done', tone: 'mint', ms: 6000 });
+      } catch (e) {
+        toast(e.message || 'Kunne ikke gemme i skyen', { icon: 'error', tone: 'coral' });
+      }
+      rerender();
+    },
+    async cloudSync(_d, el) {
+      el.disabled = true;
+      await cloud.syncNow();
+      toast(cloud.lastError || 'Synkroniseret', { icon: cloud.lastError ? 'cloud_off' : 'cloud_done', tone: cloud.lastError ? 'coral' : 'mint' });
+      rerender();
+    },
+    async cloudCopy() {
+      const code = cloud.familyCode();
+      try {
+        await navigator.clipboard.writeText(code);
+        toast('Familiekoden er kopieret', { icon: 'content_copy', tone: 'mint' });
+      } catch {
+        toast(`Familiekode: ${code}`, { icon: 'info', ms: 6000 });
+      }
+    },
+    async cloudLeave(_d, el) {
+      if (el.dataset.confirm !== '1') {
+        el.dataset.confirm = '1';
+        el.innerHTML = `${icon('warning')}Tryk igen for at afbryde`;
+        return;
+      }
+      await cloud.leaveFamily();
+      toast('Enheden synkroniserer ikke længere. Data ligger stadig her.', { icon: 'cloud_off', ms: 5000 });
+      rerender();
+    },
     async demoOff() {
       await A.resetAll();
       app.childId = null;
@@ -242,8 +278,16 @@ export const parent = {
     async restore(el) {
       const f = el.files?.[0];
       if (!f) return;
+      const savedLink = cloud.currentLink();
       const r = await A.importBackup(await f.text());
       if (!r.ok) return toast(r.reason, { icon: 'error', tone: 'coral' });
+      if (savedLink) {
+        try {
+          await cloud.replaceWithLocal(savedLink);
+        } catch (e) {
+          toast(`Backuppen er indlæst her, men ikke i skyen: ${e.message}`, { icon: 'cloud_off', tone: 'coral', ms: 6000 });
+        }
+      }
       app.childId = null;
       toast('Backup indlæst', { icon: 'restore', tone: 'mint' });
       go('who', {}, { replace: true });
@@ -295,6 +339,13 @@ export const parent = {
     },
     async reset(form) {
       if (form.confirm.value.trim().toUpperCase() !== 'SLET') return toast('Skriv SLET for at bekræfte', { icon: 'error', tone: 'coral' });
+      if (cloud.isLinked()) {
+        try {
+          await cloud.deleteFamily();
+        } catch (e) {
+          return toast(`Kunne ikke slette i skyen: ${e.message}`, { icon: 'error', tone: 'coral' });
+        }
+      }
       await A.resetAll();
       app.childId = null;
       lockParent();
@@ -513,9 +564,34 @@ const TAB_RENDER = {
 
   data() {
     const where = app.storage === 'indexeddb' ? 'i denne browsers database (IndexedDB)' : app.storage === 'local' ? 'i denne browsers lille lager' : 'kun midlertidigt';
-    return `<div class="panel stack">
+    const linked = cloud.isLinked();
+    let cloudBox;
+    if (linked) {
+      cloudBox = `<div class="panel stack cloud-box">
+        <h2 class="h3">${icon('cloud_done')}Familien i skyen</h2>
+        <p>Alle enheder med familiekoden deler figurer, point, opgaver og kampe.</p>
+        <div class="family-code"><span>Familiekode</span><b>${esc(cloud.familyCode())}</b></div>
+        <p class="help">Forbind en ny iPad: åbn spillet, og vælg "Forbind til familien" med koden og jeres forældre-PIN.</p>
+        <p class="help">${cloud.lastError ? `${icon('cloud_off')}${esc(cloud.lastError)}` : cloud.lastSync ? `Sidst synkroniseret ${timeAgo(cloud.lastSync)}` : 'Synkroniserer …'}</p>
+        <div class="row-btns">
+          <button type="button" class="btn" data-act="cloudSync">${icon('sync')}Synkroniser nu</button>
+          <button type="button" class="btn btn-ghost" data-act="cloudCopy">${icon('content_copy')}Kopiér kode</button>
+          <button type="button" class="btn btn-ghost" data-act="cloudLeave">${icon('cloud_off')}Afbryd denne enhed</button>
+        </div>
+      </div>`;
+    } else if (cloud.isAvailable()) {
+      cloudBox = `<div class="panel stack cloud-box">
+        <h2 class="h3">${icon('cloud_upload')}Gem familien i skyen</h2>
+        <p>Så kan flere iPads dele figurer og point, og børnene kan udfordre hinanden fra hver sin enhed. Alt på denne enhed bliver familiens fælles data.</p>
+        <button type="button" class="btn" data-act="cloudCreate">${icon('cloud_upload')}Gem i skyen og lav familiekode</button>
+        <p class="help">Har I allerede en familiekode fra en anden enhed? Brug "Slet alt" nederst, og vælg "Forbind til familien" på startsiden. Det, der er på denne enhed, bliver så erstattet.</p>
+      </div>`;
+    } else {
+      cloudBox = `<div class="panel stack"><h2 class="h3">${icon('cloud_off')}Skyen</h2><p>${cloud.isConfigured() ? 'Serveren kan ikke nå databasen lige nu. Prøv igen om lidt.' : 'Der er ingen database på denne adresse, så alt gemmes kun på enheden.'}</p></div>`;
+    }
+    return `${cloudBox}<div class="panel stack">
         <h2 class="h3">${icon('save')}Backup</h2>
-        <p>I testversionen gemmes alt ${where} på denne enhed. Tag en backup, før I skifter enhed eller rydder browseren.</p>
+        <p>${linked ? 'Alt gemmes i skyen og på denne enhed. En backup er en ekstra sikkerhed.' : `Alt gemmes ${where} på denne enhed. Tag en backup, før I skifter enhed eller rydder browseren.`}</p>
         <div class="row-btns">
           <button type="button" class="btn" data-act="backup">${icon('download')}Gem backup</button>
           <label class="btn btn-ghost file-btn">${icon('upload')}Indlæs backup<input type="file" accept="application/json,.json" class="sr-only" data-change="restore"></label>
@@ -537,7 +613,7 @@ const TAB_RENDER = {
       }
       <form class="panel stack danger" data-form="reset">
         <h2 class="h3">${icon('delete_forever')}Slet alt</h2>
-        <p>Sletter alle profiler, figurer, billeder og point på denne enhed.</p>
+        <p>${cloud.isLinked() ? 'Sletter alle profiler, figurer, billeder og point for hele familien – på alle enheder og i skyen.' : 'Sletter alle profiler, figurer, billeder og point på denne enhed.'}</p>
         <label class="field"><span>Skriv SLET for at bekræfte</span><input type="text" name="confirm" autocomplete="off"></label>
         <button type="submit" class="btn btn-coral">Slet alt</button>
       </form>`;

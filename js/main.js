@@ -12,6 +12,7 @@ import { icon, avatar } from './ui/components.js';
 import { sfx, toast, closeModal, isSoundOn, setSound, unlockAudio, modalOpen, celebrating } from './ui/fx.js';
 import { esc } from './util.js';
 import { unlockVoice, stopSpeaking } from './voice.js';
+import * as cloud from './cloud.js';
 
 const SCREENS = {
   setup,
@@ -260,13 +261,36 @@ async function boot() {
   setRenderer(render);
   go(A.S.family ? 'who' : 'setup', {}, { replace: true });
 
+  const isBusy = () => modalOpen() || celebrating() || ['exercise', 'battle', 'newtoy', 'task'].includes(app.route.name);
+  const isTyping = () => document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+
+  // Nyt fra en anden enhed: vis det, når barnet ikke er midt i noget
+  let pendingRemote = false;
+  const showRemote = () => {
+    if (isBusy() || isTyping()) {
+      pendingRemote = true;
+      return;
+    }
+    pendingRemote = false;
+    if (app.route.name === 'setup' && A.S.family) go('who', {}, { replace: true });
+    else rerender();
+  };
+  A.bus.on('remote', showRemote);
+  A.bus.on('cloud', (e) => {
+    if (e.kind === 'unlinked') toast('Denne enhed er ikke længere forbundet til familien.', { icon: 'cloud_off', tone: 'coral', ms: 5000 });
+  });
+  cloud.initCloud().then(() => {
+    if (app.route.name === 'setup' || app.route.name === 'parent') rerender();
+  });
+
   // Opdater nedtællinger og udløbne udfordringer en gang i minuttet
   setInterval(() => {
-    const busy = modalOpen() || celebrating() || ['exercise', 'battle', 'setup', 'newtoy', 'task', 'parent'].includes(app.route.name);
-    const typing = document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
     A.cleanup();
-    if (!busy && !typing && !document.hidden) rerender();
+    if (!isBusy() && !isTyping() && !document.hidden && !['setup', 'parent'].includes(app.route.name)) rerender();
   }, 60000);
+  setInterval(() => {
+    if (pendingRemote) showRemote();
+  }, 3000);
 }
 
 boot();

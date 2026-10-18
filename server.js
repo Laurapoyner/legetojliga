@@ -10,6 +10,8 @@ import { createHash } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openMongo, openMemory } from './server/db.js';
+import { createApi } from './server/api.js';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3000;
@@ -27,7 +29,25 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8',
 };
 
-const BLOCKED = ['/node_modules', '/tests', '/.git', '/package.json', '/server.js', '/.env'];
+const BLOCKED = ['/node_modules', '/tests', '/.git', '/package.json', '/package-lock.json', '/server.js', '/server/', '/.env'];
+
+// ---------- Database ----------
+
+let api = null;
+const MONGO_URI = (process.env.MONGODB_URI || '').trim();
+
+async function connectDb() {
+  try {
+    const db = process.env.LL_MEMORY_DB === '1' ? openMemory() : await openMongo(MONGO_URI, process.env.MONGODB_DB || 'legetoejsligaen');
+    api = createApi(await db);
+    console.log(process.env.LL_MEMORY_DB === '1' ? 'Database: i hukommelsen (test)' : 'Database: forbundet til MongoDB');
+  } catch (e) {
+    console.error('Kunne ikke forbinde til MongoDB – prøver igen om 30 sekunder.', e.message);
+    setTimeout(connectDb, 30000);
+  }
+}
+if (MONGO_URI || process.env.LL_MEMORY_DB === '1') connectDb();
+else console.log('Database: ikke sat op (MONGODB_URI mangler) – data gemmes kun på hver enhed');
 
 // ---------- Azure-oplæsning ----------
 
@@ -145,6 +165,13 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     let path = decodeURIComponent(url.pathname);
 
+    if (path === '/api/status' && req.method === 'GET') {
+      return json(res, 200, { db: !!api, dbConfigured: !!(MONGO_URI || process.env.LL_MEMORY_DB === '1'), azure: AZ_ON });
+    }
+    if (path.startsWith('/api/') && path !== '/api/tts' && path !== '/api/tts/status') {
+      if (!api) return json(res, 503, { error: 'Databasen er ikke klar' });
+      if (await api(req, res, path)) return;
+    }
     if (path === '/api/tts/status' && req.method === 'GET') {
       return json(res, 200, { azure: AZ_ON, voices: [...VOICES], todayChars: usage.chars, dailyLimit: DAILY_CHARS });
     }
