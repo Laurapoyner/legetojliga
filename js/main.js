@@ -147,7 +147,7 @@ const GLOBAL = {
   },
   readAct({ id }) {
     unlockVoice();
-    say(K.activitySpeech(A.activityById(id), app.childId), { interrupt: true });
+    say(K.activitySpeech(A.activityById(id)), { interrupt: true });
   },
   openToy({ id }) {
     sfx.tap();

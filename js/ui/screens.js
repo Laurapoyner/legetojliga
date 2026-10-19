@@ -242,7 +242,7 @@ export const home = {
       const parts = ms.map((m, i) => {
         const claimed = isMissionClaimed(S, app.childId, day, m.id);
         const prog = Math.min(m.target, missionProgress(S, app.childId, day, m));
-        const state = claimed ? 'Klaret.' : prog >= m.target ? 'Klar! Hent din belønning.' : `Du får ${m.xp} XP.`;
+        const state = claimed ? 'Klaret.' : prog >= m.target ? 'Klar! Hent din belønning.' : '';
         return `${words[i] || ''} mission: ${m.text}. ${state}`;
       });
       say(`Dagens missioner. ${parts.join(' ')}`, { interrupt: true });
@@ -683,18 +683,9 @@ function speakBtn(id, kind = 'readAct') {
 }
 
 // Tekst, der læses op for en opgave eller træning
-export function activitySpeech(a, childId) {
+export function activitySpeech(a) {
   if (!a) return '';
-  const c = childById(childId);
-  const u = childId ? activityUsage(S, childId, a) : { ok: true };
-  let how;
-  if (a.kind === 'camera') {
-    const target = scaledTarget(a, c?.difficulty);
-    how = `Kameraet tæller. Lav ${target} ${a.cam.unit === 'sec' ? 'sekunder' : 'gange'}.`;
-  } else if (a.kind === 'photo') how = 'Tag et billede, når du er færdig. Så godkender en voksen det.';
-  else how = 'Når du er færdig, godkender en voksen det.';
-  const used = u.ok ? '' : u.per === 'week' ? ' Den er klaret nok gange denne uge.' : ' Den er klaret i dag. Prøv igen i morgen!';
-  return `${a.title}. ${a.desc || ''} ${how} Du får ${a.xp} XP.${used}`;
+  return `${a.title}. ${a.desc || ''}`;
 }
 
 // ---------- Opgaver ----------
@@ -800,10 +791,7 @@ export const task = {
     readTask({ id }) {
       const a = activityById(id);
       if (!a) return;
-      const how = a.kind === 'photo'
-        ? 'Tag et billede, når du er færdig, og send det. Så godkender en voksen det.'
-        : 'Når du er færdig, så tryk send. Så godkender en voksen det.';
-      say(`${a.title}. ${a.desc || ''} Du får ${a.xp} XP. ${how}`, { interrupt: true });
+      say(activitySpeech(a), { interrupt: true });
     },
     async sendTask(_d, el) {
       const d = app.draft.task;
