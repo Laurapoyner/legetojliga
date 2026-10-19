@@ -4579,37 +4579,54 @@ html[data-screen='exercise'] body::before {
 .act-item,
 .care-item {
   position: relative;
-  display: flex;
-  gap: 8px;
-  align-items: stretch;
   min-width: 0;
 }
 
 .act-item .act-row {
-  flex: 1;
-  min-width: 0;
+  grid-template-columns: auto 1fr auto auto;
+}
+
+/* Plads til højttaleren lige til venstre for XP */
+.act-speak-space {
+  width: 48px;
+  height: 48px;
+}
+
+.act-xp {
+  width: 64px;
+  min-width: 64px;
 }
 
 .speak-mini {
-  flex: none;
   display: grid;
   place-items: center;
-  width: 52px;
-  border: var(--bw) solid var(--ink);
-  border-radius: var(--r);
+  border: 2.5px solid var(--ink);
   background: var(--sea-2);
   box-shadow: var(--shadow-sm);
   color: var(--ink);
   padding: 0;
+  touch-action: manipulation;
+}
+
+.act-item .speak-mini {
+  position: absolute;
+  top: 50%;
+  /* kant 3 + luft 14 + XP 64 + mellemrum 12 */
+  right: 93px;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+  border-radius: 14px;
+  z-index: 1;
 }
 
 .speak-mini .ms {
-  font-size: 1.6rem;
+  font-size: 1.5rem;
 }
 
 .speak-mini:active {
-  transform: translateY(2px);
   box-shadow: 0 1px 0 var(--ink);
+  translate: 0 2px;
 }
 
 .care-item .care-btn {
@@ -4637,4 +4654,20 @@ input,
 select,
 textarea {
   font-size: max(16px, 1rem);
+}
+
+@media (max-width: 480px) {
+  .act-item .act-row {
+    gap: 10px;
+    padding-inline: 12px;
+  }
+  .act-item .act-ic {
+    width: 42px;
+    height: 42px;
+    font-size: 1.5rem;
+  }
+  .act-item .speak-mini {
+    /* kant 3 + luft 12 + XP 64 + mellemrum 10 */
+    right: 89px;
+  }
 }

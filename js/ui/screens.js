@@ -632,11 +632,11 @@ export const training = {
       const u = activityUsage(S, c.id, a);
       const target = a.kind === 'camera' ? scaledTarget(a, c.difficulty) : null;
       const goal = a.kind === 'camera' ? (a.cam.unit === 'sec' ? `${target} sekunder` : `${target} gange`) : '';
-      return `<div class="act-item">${speakBtn(a.id)}<button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="${a.kind === 'camera' ? 'startExercise' : 'adultTraining'}" data-id="${a.id}" ${u.ok ? '' : 'aria-disabled="true"'}>
+      return `<div class="act-item"><button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="${a.kind === 'camera' ? 'startExercise' : 'adultTraining'}" data-id="${a.id}" ${u.ok ? '' : 'aria-disabled="true"'}>
         <span class="act-ic">${icon(u.ok ? a.icon || 'sprint' : 'check')}</span>
         <span class="act-body"><b>${esc(a.title)}</b><span>${esc(goal ? `${goal} · ${a.desc || ''}` : a.desc || '')}</span><small>${limitText(u)} · træner ${a.stat === 'alle' ? 'alle evner' : STAT_NAMES[a.stat]?.toLowerCase() || 'alt'}</small></span>
-        <span class="act-xp">+${a.xp}<small>XP</small></span>
-      </button></div>`;
+        <span class="act-speak-space" aria-hidden="true"></span><span class="act-xp">+${a.xp}<small>XP</small></span>
+      </button>${speakBtn(a.id)}</div>`;
     };
     return `${pageHead('Træningscenter', { sub: 'Bevæg dig – så bliver din figur stærkere' })}
       <section class="block">
@@ -718,11 +718,11 @@ export const tasks = {
       <div class="act-list">${availableFirst(acts, c.id)
         .map((a) => {
           const u = activityUsage(S, c.id, a);
-          return `<div class="act-item">${speakBtn(a.id)}<button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="openTask" data-id="${a.id}">
+          return `<div class="act-item"><button type="button" class="act-row ${u.ok ? '' : 'is-used'}" data-act="openTask" data-id="${a.id}">
             <span class="act-ic">${icon(u.ok ? a.icon || 'task_alt' : 'check')}</span>
             <span class="act-body"><b>${esc(a.title)}</b><span>${esc(a.desc || '')}</span><small>${kindPill(a.kind)} ${limitText(u)}</small></span>
-            <span class="act-xp">+${a.xp}<small>XP</small></span>
-          </button></div>`;
+            <span class="act-speak-space" aria-hidden="true"></span><span class="act-xp">+${a.xp}<small>XP</small></span>
+          </button>${speakBtn(a.id)}</div>`;
         })
         .join('')}</div>
       ${

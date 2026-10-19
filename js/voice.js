@@ -37,6 +37,34 @@ function deviceVoice() {
   return da.find((v) => /natural|neural|online|sara|christel/i.test(v.name)) || da[0] || null;
 }
 
+const hasSynth = () => !!globalThis.speechSynthesis && typeof SpeechSynthesisUtterance !== 'undefined';
+
+// Én fast lydafspiller. iPad og iPhone tillader kun lyd fra en afspiller, der er "låst op"
+// med et tryk – bagefter kan den afspille Azure-lyd, også når den er hentet over nettet.
+// En <audio>-afspiller spiller også, når iPhone står på lydløs (det gør Web Audio ikke).
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+let player = null;
+function getPlayer() {
+  if (!player && typeof Audio !== 'undefined') {
+    player = new Audio();
+    player.preload = 'auto';
+    player.setAttribute('playsinline', '');
+  }
+  return player;
+}
+
+function unlockPlayer() {
+  const p = getPlayer();
+  if (!p) return;
+  try {
+    p.src = SILENT_WAV;
+    const r = p.play();
+    if (r && r.catch) r.catch(() => {});
+  } catch {
+    /* ikke vigtigt */
+  }
+}
+
 function waitForVoices() {
   const synth = globalThis.speechSynthesis;
   if (!synth) return Promise.resolve();
@@ -61,7 +89,7 @@ async function detect() {
     /* ingen server med Azure – brug enhedens stemme */
   }
   await waitForVoices();
-  return deviceVoice() ? 'device' : 'none';
+  return hasSynth() ? 'device' : 'none';
 }
 
 // 'azure' | 'device' | 'none'
@@ -81,6 +109,7 @@ let unlocked = false;
 export function unlockVoice() {
   if (unlocked) return;
   unlocked = true;
+  unlockPlayer();
   try {
     const synth = globalThis.speechSynthesis;
     if (synth && typeof SpeechSynthesisUtterance !== 'undefined') {
@@ -98,10 +127,6 @@ export function unlockVoice() {
 
 const cache = new Map();
 const MAX_CACHE = 160;
-
-function decode(ac, buf) {
-  return new Promise((resolve, reject) => ac.decodeAudioData(buf, resolve, reject));
-}
 
 function fetchAzure(text) {
   const vs = voiceSettings();
@@ -122,14 +147,16 @@ function fetchAzure(text) {
       if (r.status === 429 || r.status === 503) azureBlockedUntil = Date.now() + 10 * 60000;
       throw Object.assign(new Error(`tts ${r.status}`), { status: r.status });
     }
-    const buf = await r.arrayBuffer();
-    const ac = audioContext();
-    if (!ac) throw new Error('ingen lyd');
-    return decode(ac, buf);
+    const blob = await r.blob();
+    return URL.createObjectURL(new Blob([blob], { type: 'audio/mpeg' }));
   })();
   cache.set(key, p);
   p.catch(() => cache.delete(key));
-  while (cache.size > MAX_CACHE) cache.delete(cache.keys().next().value);
+  while (cache.size > MAX_CACHE) {
+    const oldKey = cache.keys().next().value;
+    cache.get(oldKey)?.then((u) => URL.revokeObjectURL(u)).catch(() => {});
+    cache.delete(oldKey);
+  }
   return p;
 }
 
@@ -166,12 +193,23 @@ function stopCurrent() {
   }
 }
 
+let lastCancel = 0;
+
 export function stopSpeaking() {
   gen++;
   queue = [];
   stopCurrent();
   try {
-    globalThis.speechSynthesis?.cancel();
+    if (player && !player.paused) player.pause();
+  } catch {
+    /* ikke vigtigt */
+  }
+  try {
+    const synth = globalThis.speechSynthesis;
+    if (synth && (synth.speaking || synth.pending)) {
+      synth.cancel();
+      lastCancel = Date.now();
+    }
   } catch {
     /* ikke vigtigt */
   }
@@ -201,12 +239,13 @@ async function pump() {
           azureFailures = 0;
           continue;
         } catch (e) {
-          azureFailures++;
-          console.warn('Azure-stemmen svarede ikke, bruger enhedens stemme', e);
+          // Afvist afspilning (ikke låst op endnu) er ikke Azures fejl
+          if (e?.name !== 'NotAllowedError') azureFailures++;
+          console.warn('Azure-lyden kunne ikke afspilles, bruger enhedens stemme', e);
         }
       }
       if (item.gen !== gen) continue;
-      if (deviceVoice()) await playDevice(item.text);
+      if (hasSynth()) await playDevice(item.text);
     }
   } finally {
     busy = false;
@@ -214,42 +253,57 @@ async function pump() {
 }
 
 async function playAzure(text, itemGen) {
-  const buffer = await fetchAzure(text);
+  const url = await fetchAzure(text);
   if (itemGen !== gen) return;
-  const ac = audioContext();
-  if (!ac) return;
-  await new Promise((resolve) => {
-    const src = ac.createBufferSource();
-    src.buffer = buffer;
-    src.connect(ac.destination);
+  const p = getPlayer();
+  if (!p) throw new Error('ingen afspiller');
+  await new Promise((resolve, reject) => {
+    let finished = false;
     const done = () => {
-      if (current && current.src === src) current = null;
+      if (finished) return;
+      finished = true;
+      p.onended = null;
+      p.onerror = null;
+      clearTimeout(safety);
+      if (current && current.p === p) current = null;
       resolve();
     };
-    src.onended = done;
+    p.onended = done;
+    p.onerror = done;
+    const safety = setTimeout(done, 20000);
     current = {
-      src,
+      p,
       stop: () => {
         try {
-          src.stop();
+          p.pause();
         } catch {
           /* ignorer */
         }
         done();
       },
     };
-    src.start();
+    p.src = url;
+    const r = p.play();
+    if (r && r.catch) {
+      r.catch((e) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(safety);
+        current = null;
+        reject(e);
+      });
+    }
   });
 }
 
 function playDevice(text) {
   return new Promise((resolve) => {
     const synth = globalThis.speechSynthesis;
+    if (!synth) return resolve();
     const v = deviceVoice();
-    if (!synth || !v) return resolve();
     const u = new SpeechSynthesisUtterance(text);
-    u.voice = v;
-    u.lang = v.lang || 'da-DK';
+    if (v) u.voice = v;
+    u.lang = v?.lang || 'da-DK';
     u.rate = voiceSettings().rate === 'slow' ? 0.82 : 0.98;
     u.pitch = 1.05;
     let finished = false;
@@ -272,7 +326,11 @@ function playDevice(text) {
         done();
       },
     };
-    synth.speak(u);
+    // iPad sluger en sætning, der startes lige efter en afbrydelse
+    const wait = Math.max(0, 120 - (Date.now() - lastCancel));
+    setTimeout(() => {
+      if (!finished) synth.speak(u);
+    }, wait);
   });
 }
 
